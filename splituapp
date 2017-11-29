@@ -1,0 +1,141 @@
+#!/usr/bin/env python
+
+# splituapp for Python2/3 by SuperR. @XDA
+#
+# For extracting img files from UPDATE.APP
+
+# Based on the app_structure file in split_updata.pl by McSpoon
+
+from __future__ import print_function
+
+import os
+import re
+import sys
+import string
+import struct
+from subprocess import Popen, PIPE, STDOUT
+
+def usage():
+	print()
+	if os.name != 'nt':
+		osbit = './splituapp'
+	else:
+		osbit = 'python splituapp'
+
+	print('USAGE: '+osbit+' UPDATE.APP [ name1 name2 ... ]')
+	print()
+	print('To extract all img files:')
+	print(osbit+' UPDATE.APP')
+	print()
+	print('To extract only system.img:')
+	print(osbit+' UPDATE.APP system')
+	print()
+	sys.exit()
+
+def cmd(command):
+	if os.name == 'nt':
+		runit = Popen(command, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, universal_newlines=True)
+	else:
+		runit = Popen(command, close_fds=True, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, universal_newlines=True)
+
+	runit = runit.communicate()
+	runit = runit[0].strip()
+	return runit
+
+def existf(filename):
+	try:
+		if os.path.isdir(filename):
+			return 2
+		if os.stat(filename).st_size > 0:
+			return 0
+		else:
+			return 1
+	except OSError:
+		return 2
+
+bytenum = 4
+outdir = 'output'
+try:
+	os.makedirs(outdir)
+except:
+	pass
+source = None
+flist = None
+if len(sys.argv) > 1:
+	source = sys.argv[1]
+	if existf(source) != 0:
+		print('\nERROR: '+source+' does not exist or is not a file')
+		usage()
+	if len(sys.argv) >= 3:
+		flist = sys.argv[2:]
+else:
+	usage()
+
+py2 = None
+if int(''.join(str(i) for i in sys.version_info[0:2])) < 30:
+	py2 = 1
+ 
+with open(source, 'rb') as f:
+	while True:
+		i = f.read(bytenum)
+		if not i:
+			break
+		if i != b'\x55\xAA\x5A\xA5':
+			continue
+		else:
+			headersize = f.read(bytenum)
+			headersize = list(struct.unpack('<L', headersize))[0]
+			f.seek(16, 1)
+			filesize = f.read(bytenum)
+			filesize = list(struct.unpack('<L', filesize))[0]
+			f.seek(32, 1)
+			filename = f.read(16)
+			try:
+				filename = str(filename.decode())
+				filename = ''.join(f for f in filename if f in string.printable).lower()
+			except:
+				filename = ''
+
+			f.seek(22, 1)
+			crcdata = f.read(headersize - 98)
+			
+			getimg = None
+			if flist and filename in flist:
+				getimg = 1
+			elif not flist:
+				getimg = 1
+			
+			if getimg:
+				imgdata = f.read(filesize)
+				try:
+					print('Extracting '+filename+'.img ...')
+					with open(outdir+os.sep+filename+'.img', 'wb') as o:
+						o.write(imgdata)
+				except:
+					print('ERROR: Failed to create '+filename+'.img\n')
+					sys.exit()
+				
+				if os.name != 'nt':
+					if existf('crc') == 0:
+						print('Calculating crc value for '+filename+'.img ...\n')
+						crcval = []
+						if py2:
+							for i in crcdata:
+								crcval.append('%02X' % ord(i))
+						else:
+							for i in crcdata:
+								crcval.append('%02X' % i)
+						crcval = ''.join(crcval)
+
+						crcact = cmd('./crc output/'+filename+'.img')
+						if crcval != crcact:
+							print('ERROR: crc value for '+filename+'.img does not match\n')
+							sys.exit()
+			else:
+				f.seek(filesize, 1)
+			
+			xbytes = bytenum - f.tell() % bytenum
+			if xbytes < bytenum:
+				f.seek(xbytes, 1)
+
+print('\nExtraction complete')
