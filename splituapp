@@ -13,24 +13,22 @@ import re
 import sys
 import string
 import struct
+import argparse
 from subprocess import Popen, PIPE, STDOUT
 
-def usage():
-	print()
-	if os.name != 'nt':
-		osbit = './splituapp'
-	else:
-		osbit = 'python splituapp'
+parser = argparse.ArgumentParser(description="Split UPDATE.APP file into img files", add_help=False)
+required = parser.add_argument_group('Required')
+required.add_argument("-f", "--filename", required=True, help="Path to update.app file")
+optional = parser.add_argument_group('Optional')
+optional.add_argument("-h", "--help", action="help", help="show this help message and exit")
+optional.add_argument("-l", "--list", nargs="*", metavar=('img1', 'img2'), help="List of img files to extract")
+args = parser.parse_args()
 
-	print('USAGE: '+osbit+' UPDATE.APP [ name1 name2 ... ]')
-	print()
-	print('To extract all img files:')
-	print(osbit+' UPDATE.APP')
-	print()
-	print('To extract only system.img:')
-	print(osbit+' UPDATE.APP system')
-	print()
-	sys.exit()
+source = args.filename
+
+flist = None
+if args.list:
+	flist = args.list
 
 def cmd(command):
 	if os.name == 'nt':
@@ -59,17 +57,6 @@ try:
 	os.makedirs(outdir)
 except:
 	pass
-source = None
-flist = None
-if len(sys.argv) > 1:
-	source = sys.argv[1]
-	if existf(source) != 0:
-		print('\nERROR: '+source+' does not exist or is not a file')
-		usage()
-	if len(sys.argv) >= 3:
-		flist = sys.argv[2:]
-else:
-	usage()
 
 py2 = None
 if int(''.join(str(i) for i in sys.version_info[0:2])) < 30:
