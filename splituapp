@@ -27,6 +27,8 @@ def extract(source, flist):
 
 	bytenum = 4
 	outdir = 'output'
+	img_files = []
+
 	try:
 		os.makedirs(outdir)
 	except:
@@ -39,80 +41,87 @@ def extract(source, flist):
 	with open(source, 'rb') as f:
 		while True:
 			i = f.read(bytenum)
+
 			if not i:
 				break
-			if i != b'\x55\xAA\x5A\xA5':
+			elif i != b'\x55\xAA\x5A\xA5':
 				continue
-			else:
-				headersize = f.read(bytenum)
-				headersize = list(struct.unpack('<L', headersize))[0]
-				f.seek(16, 1)
-				filesize = f.read(bytenum)
-				filesize = list(struct.unpack('<L', filesize))[0]
-				f.seek(32, 1)
-				filename = f.read(16)
+
+			headersize = f.read(bytenum)
+			headersize = list(struct.unpack('<L', headersize))[0]
+			f.seek(16, 1)
+			filesize = f.read(bytenum)
+			filesize = list(struct.unpack('<L', filesize))[0]
+			f.seek(32, 1)
+			filename = f.read(16)
+
+			try:
+				filename = str(filename.decode())
+				filename = ''.join(f for f in filename if f in string.printable).lower()
+			except:
+				filename = ''
+
+			f.seek(22, 1)
+			crcdata = f.read(headersize - 98)
+
+			getimg = None
+			if flist and filename in flist:
+				getimg = 1
+			elif not flist:
+				getimg = 1
+
+			if getimg:
+				if filename in img_files:
+					filename = filename+'_2'
+
+				print('Extracting '+filename+'.img ...')
+
+				chunk = 10240
 
 				try:
-					filename = str(filename.decode())
-					filename = ''.join(f for f in filename if f in string.printable).lower()
+					with open(outdir+os.sep+filename+'.img', 'wb') as o:
+						while filesize > 0:
+							o.write(f.read(chunk))
+							filesize -= chunk
+
+							if chunk > filesize:
+								chunk = filesize
 				except:
-					filename = ''
-
-				f.seek(22, 1)
-				crcdata = f.read(headersize - 98)
+					print('ERROR: Failed to create '+filename+'.img\n')
+					return 1
 				
-				getimg = None
-				if flist and filename in flist:
-					getimg = 1
-				elif not flist:
-					getimg = 1
+				img_files.append(filename)
 				
-				if getimg:
-					print('Extracting '+filename+'.img ...')
+				if os.name != 'nt':
+					if os.path.isfile('crc'):
+						print('Calculating crc value for '+filename+'.img ...\n')
+						crcval = []
+						if py2:
+							for i in crcdata:
+								crcval.append('%02X' % ord(i))
+						else:
+							for i in crcdata:
+								crcval.append('%02X' % i)
+						crcval = ''.join(crcval)
 
-					chunk = 10240
+						crcact = cmd('./crc output/'+filename+'.img')
 
-					try:
-						with open(outdir+os.sep+filename+'.img', 'wb') as o:
-							while filesize > 0:
-								o.write(f.read(chunk))
-								filesize -= chunk
+						if crcval != crcact:
+							print('ERROR: crc value for '+filename+'.img does not match\n')
+							return 1
+			else:
+				f.seek(filesize, 1)
 
-								if chunk > filesize:
-									chunk = filesize
-					except:
-						print('ERROR: Failed to create '+filename+'.img\n')
-						return 1
-					
-					if os.name != 'nt':
-						if os.path.isfile('crc'):
-							print('Calculating crc value for '+filename+'.img ...\n')
-							crcval = []
-							if py2:
-								for i in crcdata:
-									crcval.append('%02X' % ord(i))
-							else:
-								for i in crcdata:
-									crcval.append('%02X' % i)
-							crcval = ''.join(crcval)
-
-							crcact = cmd('./crc output/'+filename+'.img')
-
-							if crcval != crcact:
-								print('ERROR: crc value for '+filename+'.img does not match\n')
-								return 1
-				else:
-					f.seek(filesize, 1)
-				
-				xbytes = bytenum - f.tell() % bytenum
-				if xbytes < bytenum:
-					f.seek(xbytes, 1)
+			xbytes = bytenum - f.tell() % bytenum
+			if xbytes < bytenum:
+				f.seek(xbytes, 1)
 
 	print('\nExtraction complete')
 	return 0
 
 if __name__ == '__main__':
 	import argparse
+
 	parser = argparse.ArgumentParser(description="Split UPDATE.APP file into img files", add_help=False)
 	required = parser.add_argument_group('Required')
 	required.add_argument("-f", "--filename", required=True, help="Path to update.app file")
