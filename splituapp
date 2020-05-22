@@ -37,7 +37,7 @@ def extract(source, flist):
 	py2 = None
 	if int(''.join(str(i) for i in sys.version_info[0:2])) < 30:
 		py2 = 1
-	
+
 	with open(source, 'rb') as f:
 		while True:
 			i = f.read(bytenum)
@@ -75,20 +75,21 @@ def extract(source, flist):
 				try:
 					with open(outdir+os.sep+filename+'.img', 'wb') as o:
 						while filesize > 0:
-							o.write(f.read(chunk))
-							filesize -= chunk
-
 							if chunk > filesize:
 								chunk = filesize
+
+							o.write(f.read(chunk))
+							filesize -= chunk
 				except:
 					print('ERROR: Failed to create '+filename+'.img\n')
 					return 1
-				
+
 				img_files.append(filename)
-				
+
 				if os.name != 'nt':
 					if os.path.isfile('crc'):
 						print('Calculating crc value for '+filename+'.img ...\n')
+
 						crcval = []
 						if py2:
 							for i in crcdata:
@@ -96,8 +97,8 @@ def extract(source, flist):
 						else:
 							for i in crcdata:
 								crcval.append('%02X' % i)
-						crcval = ''.join(crcval)
 
+						crcval = ''.join(crcval)
 						crcact = cmd('./crc output/'+filename+'.img')
 
 						if crcval != crcact:
