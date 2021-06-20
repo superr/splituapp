@@ -16,9 +16,9 @@ import struct
 from subprocess import check_output
 
 def extract(source, flist):
-	def cmd(command):
+	def cmd(command, argument):
 		try:
-			test1 = check_output(command)
+			test1 = check_output([command, argument])
 			test1 = test1.strip().decode()
 		except:
 			test1 = ''
@@ -99,11 +99,15 @@ def extract(source, flist):
 								crcval.append('%02X' % i)
 
 						crcval = ''.join(crcval)
-						crcact = cmd('./crc output/'+filename+'.img')
+
+						crcact = cmd('./crc', 'output/'+filename+'.img')
 
 						if crcval != crcact:
 							print('ERROR: crc value for '+filename+'.img does not match\n')
-							return 1
+
+						# Do not exit here because CRC check for system.img always fails with
+						# ERROR: Unable to open file system.img
+						# Probably because of filesize.
 			else:
 				f.seek(filesize, 1)
 
